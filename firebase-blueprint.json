@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A flower bouquet product in the catalog.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the bouquet"
+        },
+        "price": {
+          "type": "number",
+          "description": "Price in IDR"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Hand Bouquet",
+            "Box Bouquet",
+            "Round Bouquet",
+            "Standing Flower",
+            "Money Bouquet"
+          ],
+          "description": "Category of the bouquet"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the product"
+        },
+        "marketplaceLinks": {
+          "type": "object",
+          "properties": {
+            "whatsapp": { "type": "string" },
+            "shopee": { "type": "string" },
+            "tokopedia": { "type": "string" }
+          },
+          "description": "Links to various marketplaces"
+        },
+        "imageUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the product image stored in Firebase Storage"
+        },
+        "isBestSeller": {
+          "type": "boolean",
+          "description": "Flag to mark product as a best seller"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "name",
+        "price",
+        "category",
+        "imageUrl",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "Pencatatan aksi tambah/ubah/hapus yang dilakukan admin.",
+      "type": "object",
+      "properties": {
+        "adminEmail": {
+          "type": "string",
+          "format": "email"
+        },
+        "actionType": {
+          "type": "string",
+          "enum": ["CREATE", "UPDATE", "DELETE"]
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "targetName": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "adminEmail",
+        "actionType",
+        "targetId",
+        "targetName",
+        "timestamp"
+      ]
+    }
+  },
+  "firestore": {
+    "products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of flower bouquet products."
+    },
+    "activity_logs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "Collection of admin activity logs."
+    }
+  }
+}

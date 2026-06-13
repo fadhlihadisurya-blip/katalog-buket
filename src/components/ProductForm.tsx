@@ -1,0 +1,330 @@
+import React, { useState, useEffect } from 'react';
+import { Product } from '../types';
+import { X, Loader2, Save, Image as ImageIcon, Link as LinkIcon, Info, Upload } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+interface ProductFormProps {
+  product?: Product;
+  onSave: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  onClose: () => void;
+  loading: boolean;
+}
+
+export const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onClose, loading }) => {
+  const [formData, setFormData] = useState<Omit<Product, 'id' | 'createdAt' | 'updatedAt'>>({
+    name: '',
+    price: 0,
+    category: 'Hand Bouquet',
+    description: '',
+    imageUrl: '',
+    isBestSeller: false,
+    marketplaceLinks: {
+      shopee: '',
+      tokopedia: '',
+      whatsapp: ''
+    }
+  });
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (product) {
+      setFormData({
+        name: product.name,
+        price: product.price,
+        category: product.category,
+        description: product.description,
+        imageUrl: product.imageUrl,
+        isBestSeller: !!product.isBestSeller,
+        marketplaceLinks: {
+          shopee: product.marketplaceLinks?.shopee || '',
+          tokopedia: product.marketplaceLinks?.tokopedia || '',
+          whatsapp: product.marketplaceLinks?.whatsapp || ''
+        }
+      });
+      setPreviewUrl(product.imageUrl);
+    }
+  }, [product]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setFormData({ ...formData, imageUrl: '' }); // Reset URL if file is selected
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUploading(true);
+    
+    let uploadedPath = formData.imageUrl;
+
+    if (selectedFile) {
+      const formDataUpload = new FormData();
+      formDataUpload.append('image', selectedFile);
+
+      try {
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formDataUpload,
+        });
+
+        const contentType = response.headers.get("content-type");
+        if (!response.ok || !contentType || !contentType.includes("application/json")) {
+          const text = await response.text();
+          console.error('Upload failed with response:', text);
+          throw new Error('Gagal mengupload gambar. Server mengembalikan format yang salah.');
+        }
+        
+        const data = await response.json();
+        uploadedPath = data.imageUrl;
+      } catch (err: any) {
+        console.error('Error uploading image:', err);
+        alert(err.message || 'Gagal mengupload gambar. Silakan coba lagi.');
+        setUploading(false);
+        return;
+      }
+    }
+
+    if (!formData.name.trim()) {
+      alert('Nama produk tidak boleh kosong.');
+      setUploading(false);
+      return;
+    }
+
+    if (!uploadedPath && !selectedFile && !product?.imageUrl) {
+      alert('Harap pilih gambar produk.');
+      setUploading(false);
+      return;
+    }
+
+    await onSave({ 
+      ...formData, 
+      name: formData.name.trim(),
+      description: formData.description.trim(),
+      imageUrl: uploadedPath || product?.imageUrl || '' 
+    });
+    setUploading(false);
+  };
+
+  const categories = ['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet'] as const;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-brand-text/40 backdrop-blur-sm" 
+      />
+      
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
+        <div className="px-8 py-6 border-b border-brand-border flex items-center justify-between bg-white sticky top-0 z-10">
+          <div>
+            <h2 className="text-xl font-serif text-brand-text italic font-bold">
+              {product ? 'Edit Produk' : 'Tambah Produk Baru'}
+            </h2>
+            <p className="text-[10px] uppercase tracking-widest text-brand-secondary font-bold mt-1">
+              Paradise Bucket Catalog Management
+            </p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-brand-bg rounded-full transition-colors text-brand-secondary"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
+          {/* Basic Info Section */}
+      <div className="space-y-6">
+            <div className="flex items-center gap-2 text-brand-primary mb-2">
+              <Info size={16} />
+              <span className="text-[10px] uppercase tracking-widest font-bold">Informasi Produk</span>
+            </div>
+
+            <div className="flex items-center gap-3 px-4 py-3 bg-brand-primary/5 border border-brand-primary/20 rounded-xl mb-4">
+              <input 
+                type="checkbox" 
+                id="isBestSeller"
+                checked={formData.isBestSeller}
+                onChange={(e) => setFormData({ ...formData, isBestSeller: e.target.checked })}
+                className="w-4 h-4 rounded border-brand-primary text-brand-primary focus:ring-brand-primary"
+              />
+              <label htmlFor="isBestSeller" className="text-xs font-bold text-brand-primary uppercase tracking-widest cursor-pointer">
+                Tandai sebagai Best Seller
+              </label>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">Nama Produk</label>
+                <input 
+                  type="text" 
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm"
+                  placeholder="Contoh: Eternal Rose Bouquet"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">Kategori</label>
+                <select 
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                  className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm appearance-none"
+                >
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">Harga (IDR)</label>
+                <input 
+                  type="number" 
+                  required
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                  className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm"
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">Foto Produk</label>
+                <div className="flex flex-col gap-4">
+                  {previewUrl && (
+                    <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-brand-bg border border-brand-border group">
+                      <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                         <span className="text-white text-[10px] font-bold uppercase tracking-widest">Preview Foto</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="relative">
+                    <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-brand-border rounded-xl hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all cursor-pointer group">
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload size={20} className="text-brand-secondary group-hover:text-brand-primary transition-colors" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-brand-secondary group-hover:text-brand-primary">
+                          {selectedFile ? selectedFile.name : 'Pilih Foto dari Perangkat'}
+                        </span>
+                        <span className="text-[8px] text-brand-secondary/60">JPG, JPEG, PNG, GIF, BMP (Max 5MB)</span>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">Deskripsi</label>
+              <textarea 
+                rows={3}
+                required
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm resize-none"
+                placeholder="Jelaskan detail buket bunga ini..."
+              />
+            </div>
+          </div>
+
+          {/* Marketplace Links Section */}
+          <div className="space-y-6 pt-4 border-t border-brand-border">
+            <div className="flex items-center gap-2 text-brand-primary mb-2">
+              <LinkIcon size={16} />
+              <span className="text-[10px] uppercase tracking-widest font-bold">Link Marketplace</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">Shopee URL</label>
+                <input 
+                  type="url" 
+                  value={formData.marketplaceLinks.shopee}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    marketplaceLinks: { ...formData.marketplaceLinks, shopee: e.target.value } 
+                  })}
+                  className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm"
+                  placeholder="https://shopee.co.id/..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">Tokopedia URL</label>
+                <input 
+                  type="url" 
+                  value={formData.marketplaceLinks.tokopedia}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    marketplaceLinks: { ...formData.marketplaceLinks, tokopedia: e.target.value } 
+                  })}
+                  className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm"
+                  placeholder="https://tokopedia.com/..."
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">WhatsApp/Direct URL</label>
+                <input 
+                  type="url" 
+                  value={formData.marketplaceLinks.whatsapp}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    marketplaceLinks: { ...formData.marketplaceLinks, whatsapp: e.target.value } 
+                  })}
+                  className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm"
+                  placeholder="https://wa.me/..."
+                />
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <div className="px-8 py-6 border-t border-brand-border bg-brand-bg/50 flex gap-4">
+          <button 
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-3 border border-brand-border text-brand-text text-[10px] uppercase font-bold tracking-widest rounded-xl hover:bg-brand-border transition-all"
+          >
+            Batal
+          </button>
+          <button 
+            onClick={handleSubmit}
+            disabled={loading || uploading}
+            className="flex-[2] py-3 bg-brand-primary text-white text-[10px] uppercase font-bold tracking-widest rounded-xl hover:bg-brand-text transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading || uploading ? <Loader2 size={16} className="animate-spin" /> : (
+              <>
+                <Save size={16} />
+                {product ? 'Simpan Perubahan' : 'Terbitkan Produk'}
+              </>
+            )}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};

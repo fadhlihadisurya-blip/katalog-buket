@@ -1,0 +1,8 @@
+{
+  "name": "Paradise Bucket",
+  "description": "Modern flower bouquet catalog with admin dashboard and marketplace integrations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
