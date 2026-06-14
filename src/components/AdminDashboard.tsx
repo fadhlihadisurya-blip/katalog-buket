@@ -73,6 +73,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const handleSaveProduct = async (formData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
     setFormLoading(true);
     const path = 'products';
+    
+    // Check for duplicate names (case-insensitive)
+    const trimmedName = formData.name.trim().toLowerCase();
+    const isDuplicate = products.some(p => 
+      p.name.trim().toLowerCase() === trimmedName && p.id !== editingProduct?.id
+    );
+
+    if (isDuplicate) {
+      alert(`Gagal menyimpan: Nama produk "${formData.name.trim()}" sudah digunakan. Harap gunakan nama lain.`);
+      setFormLoading(false);
+      return;
+    }
+
     try {
       if (editingProduct?.id) {
         // Update

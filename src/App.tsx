@@ -34,7 +34,7 @@ function MainApp() {
     return matchesCategory && matchesSearch;
   });
 
-  const categoryCounts = ['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet'].reduce((acc, cat) => {
+  const categoryCounts = ['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet', 'Thumbelina Bouquet'].reduce((acc, cat) => {
     acc[cat] = products.filter(p => p.category === cat).length;
     return acc;
   }, {} as Record<string, number>);
@@ -280,7 +280,7 @@ function MainApp() {
                     </div>
                     <span className="text-[9px] opacity-40">{products.length}</span>
                   </li>
-                  {['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet'].map((cat) => (
+                  {['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet', 'Thumbelina Bouquet'].map((cat) => (
                     <li 
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
@@ -389,7 +389,14 @@ function MainApp() {
         <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10">
           <span className="text-[10px] uppercase tracking-widest text-brand-secondary font-bold">Available On:</span>
           <div className="flex gap-8 opacity-40 grayscale group hover:opacity-100 hover:grayscale-0 transition-all cursor-pointer font-bold text-xs tracking-tight">
-            <span className="hover:text-[#25D366] transition-colors">WhatsApp</span>
+            <a 
+              href="https://wa.me/6285362804876?text=Hallo,%20Saya%20tertarik%20untuk%20membeli%20produknya.%20" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-[#25D366] transition-colors"
+            >
+              WhatsApp
+            </a>
             <a 
               href="https://s.shopee.co.id/20t3hs5DBH" 
               target="_blank" 
@@ -398,7 +405,22 @@ function MainApp() {
             >
               Shopee
             </a>
-            <span className="hover:text-[#03AC0E] transition-colors">Tokopedia</span>
+            <a 
+              href="https://wa.me/6285362804876?text=Hallo,%20Saya%20tertarik%20untuk%20membeli%20produknya.%20" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-[#03AC0E] transition-colors"
+            >
+              Tokopedia
+            </a>
+            <a 
+              href="https://www.instagram.com/buketbunga_paradisebuket" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-[#E4405F] transition-colors"
+            >
+              Instagram
+            </a>
           </div>
         </div>
         <div className="flex gap-4 items-center bg-brand-bg px-4 py-2 rounded-full border border-brand-border">

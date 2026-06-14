@@ -162,7 +162,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onClo
     }
   };
 
-  const categories = ['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet'] as const;
+  const categories = ['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet', 'Thumbelina Bouquet'] as const;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
