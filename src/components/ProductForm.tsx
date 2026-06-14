@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
 import { X, Loader2, Save, Image as ImageIcon, Link as LinkIcon, Info, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { validateProductImage } from '../utils/validation';
+import { compressImage } from '../utils/image-compression';
 
 interface ProductFormProps {
   product?: Product;
@@ -25,6 +27,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onClo
     }
   });
 
+  const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('url');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [uploading, setUploading] = useState(false);
@@ -45,70 +48,118 @@ export const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onClo
         }
       });
       setPreviewUrl(product.imageUrl);
+      // Automatically detect if the stored image is base64
+      if (product.imageUrl && product.imageUrl.startsWith('data:image/')) {
+        setImageInputMode('upload');
+      } else {
+        setImageInputMode('url');
+      }
     }
   }, [product]);
+
+  const processSelectedFile = async (file: File) => {
+    console.log(`[DIAGNOSTICS] Selected image file: ${file.name}, size: ${Math.round(file.size / 1024)} KB, type: ${file.type}`);
+    const validation = validateProductImage(file);
+    if (!validation.isValid) {
+      alert(validation.error);
+      return;
+    }
+
+    try {
+      setUploading(true);
+      // Run high-efficiency compression targeting safe size
+      const compressed = await compressImage(file, 500, 500, 0.5);
+      const sizeInKB = Math.round((compressed.length * 3) / 4 / 1024);
+      console.log(`[DIAGNOSTICS] Image compressed successfully. Base64 length: ${compressed.length} characters. Estimated Firestore payload weight: ${sizeInKB} KB`);
+      
+      setSelectedFile(file);
+      setPreviewUrl(compressed);
+      setFormData(prev => ({ ...prev, imageUrl: compressed }));
+    } catch (err: any) {
+      console.error('[DIAGNOSTICS] Error compressing image:', err);
+      alert(`Gagal memproses gambar: ${err.message || err}`);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setFormData({ ...formData, imageUrl: '' }); // Reset URL if file is selected
+      processSelectedFile(file);
     }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processSelectedFile(file);
+    }
+  };
+
+  const handleUrlChange = (urlStr: string) => {
+    setFormData(prev => ({ ...prev, imageUrl: urlStr }));
+    setPreviewUrl(urlStr);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setUploading(true);
     
-    let uploadedPath = formData.imageUrl;
-
-    if (selectedFile) {
-      const formDataUpload = new FormData();
-      formDataUpload.append('image', selectedFile);
-
-      try {
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formDataUpload,
-        });
-
-        const contentType = response.headers.get("content-type");
-        if (!response.ok || !contentType || !contentType.includes("application/json")) {
-          const text = await response.text();
-          console.error('Upload failed with response:', text);
-          throw new Error('Gagal mengupload gambar. Server mengembalikan format yang salah.');
-        }
-        
-        const data = await response.json();
-        uploadedPath = data.imageUrl;
-      } catch (err: any) {
-        console.error('Error uploading image:', err);
-        alert(err.message || 'Gagal mengupload gambar. Silakan coba lagi.');
-        setUploading(false);
-        return;
-      }
-    }
-
     if (!formData.name.trim()) {
       alert('Nama produk tidak boleh kosong.');
-      setUploading(false);
       return;
     }
 
-    if (!uploadedPath && !selectedFile && !product?.imageUrl) {
-      alert('Harap pilih gambar produk.');
-      setUploading(false);
+    if (!formData.imageUrl.trim()) {
+      alert(imageInputMode === 'url' ? 'Harap masukkan URL foto produk.' : 'Harap pilih atau drag-and-drop sebuah foto produk.');
       return;
     }
 
-    await onSave({ 
-      ...formData, 
-      name: formData.name.trim(),
-      description: formData.description.trim(),
-      imageUrl: uploadedPath || product?.imageUrl || '' 
-    });
-    setUploading(false);
+    setUploading(true);
+    console.log('[DIAGNOSTICS] Submitting product form. Saved payload size of imageUrl:', Math.round((formData.imageUrl.length * 3) / 4 / 1024), 'KB');
+
+    try {
+      await onSave({ 
+        ...formData, 
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+        imageUrl: formData.imageUrl.trim()
+      });
+    } catch (err: any) {
+      console.error('Full Error Object:', err);
+      let errorMsg = 'Gagal menyimpan produk.';
+      
+      try {
+        // Handle specific Firestore/Auth errors
+        const errStr = err.message || '';
+        
+        if (errStr.includes('quota exceeded') || errStr.includes('resource exhausted')) {
+          errorMsg = 'Kapasitas penyimpanan penuh atau ukuran file terlalu besar untuk database.';
+        } else if (errStr.includes('permission-denied') || errStr.includes('unauthorized')) {
+          errorMsg = 'Anda tidak memiliki izin (Permission Denied). Pastikan domain Vercel Anda sudah ditambahkan ke "Authorized domains" di Firebase Console.';
+        } else if (errStr.includes('Unexpected token') || errStr.includes('format yang salah')) {
+          errorMsg = 'Terjadi kesalahan komunikasi dengan server (Vercel/Firebase). Harap periksa apakah API Keys di Vercel Settings sudah sesuai.';
+        }
+        
+        // Try to parse JSON error from handleFirestoreError if available
+        if (errStr.startsWith('{')) {
+          const errObj = JSON.parse(errStr);
+          errorMsg = errObj.error || errorMsg;
+        }
+      } catch (parseErr) {
+        console.error('Error parsing error message:', parseErr);
+        errorMsg = err.message || errorMsg;
+      }
+      
+      alert(errorMsg);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const categories = ['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet'] as const;
@@ -135,7 +186,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onClo
               {product ? 'Edit Produk' : 'Tambah Produk Baru'}
             </h2>
             <p className="text-[10px] uppercase tracking-widest text-brand-secondary font-bold mt-1">
-              Paradise Bucket Catalog Management
+              Paradisebuket Catalog Management
             </p>
           </div>
           <button 
@@ -205,35 +256,126 @@ export const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onClo
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">Foto Produk</label>
-                <div className="flex flex-col gap-4">
-                  {previewUrl && (
-                    <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-brand-bg border border-brand-border group">
-                      <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                         <span className="text-white text-[10px] font-bold uppercase tracking-widest">Preview Foto</span>
-                      </div>
-                    </div>
-                  )}
-                  <div className="relative">
-                    <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-brand-border rounded-xl hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all cursor-pointer group">
-                      <div className="flex flex-col items-center gap-2">
-                        <Upload size={20} className="text-brand-secondary group-hover:text-brand-primary transition-colors" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-brand-secondary group-hover:text-brand-primary">
-                          {selectedFile ? selectedFile.name : 'Pilih Foto dari Perangkat'}
-                        </span>
-                        <span className="text-[8px] text-brand-secondary/60">JPG, JPEG, PNG, GIF, BMP (Max 5MB)</span>
-                      </div>
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                    </label>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary px-1">
+                    Foto Produk
+                  </label>
+                  <div className="flex bg-brand-bg rounded-lg p-0.5 border border-brand-border text-[9px] font-bold uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => setImageInputMode('url')}
+                      className={`px-3 py-1.5 rounded-md transition-all ${
+                        imageInputMode === 'url'
+                          ? 'bg-white text-brand-primary shadow-sm'
+                          : 'text-brand-secondary hover:text-brand-primary'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">
+                        <LinkIcon size={10} /> Link URL
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageInputMode('upload')}
+                      className={`px-3 py-1.5 rounded-md transition-all ${
+                        imageInputMode === 'upload'
+                          ? 'bg-white text-brand-primary shadow-sm'
+                          : 'text-brand-secondary hover:text-brand-primary'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">
+                        <Upload size={10} /> Upload File
+                      </span>
+                    </button>
                   </div>
                 </div>
+
+                {/* Preview Image if exists */}
+                {previewUrl && (
+                  <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-brand-bg border border-brand-border group">
+                    <img
+                      src={previewUrl}
+                      alt="Preview Produk"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error("[DIAGNOSTICS] Error loading preview image. Source starting with:", previewUrl.substring(0, 50));
+                        e.currentTarget.style.display = 'none';
+                      }}
+                      onLoad={(e) => {
+                        e.currentTarget.style.display = 'block';
+                      }}
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-black/60 px-4 py-2 flex items-center justify-between text-white text-[9px] font-mono">
+                      <span>Preview</span>
+                      <span>
+                        {previewUrl.startsWith('data:image/') 
+                          ? `Compressed (Base64: ${Math.round((previewUrl.length * 3) / 4 / 1024)} KB)` 
+                          : 'External URL Link'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Input Fields based on Input Mode */}
+                {imageInputMode === 'url' ? (
+                  <div className="space-y-2">
+                    <input
+                      type="url"
+                      required={imageInputMode === 'url'}
+                      value={formData.imageUrl.startsWith('data:image/') ? '' : formData.imageUrl}
+                      onChange={(e) => handleUrlChange(e.target.value)}
+                      className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm"
+                      placeholder="https://imgur.com/your-image.jpg"
+                    />
+                    <div className="flex items-start gap-2 px-1">
+                      <ImageIcon size={12} className="text-brand-secondary mt-0.5" />
+                      <p className="text-[9px] text-brand-secondary leading-relaxed">
+                        Gunakan link images dari hosting eksternal seperti Imgur, PostIMG, atau Cloudinary untuk performa loading secepat kilat.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div 
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-brand-border rounded-xl hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all cursor-pointer group relative"
+                    >
+                      <label className="w-full h-full flex flex-col items-center gap-2 cursor-pointer">
+                        <Upload size={20} className="text-brand-secondary group-hover:text-brand-primary transition-colors" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-brand-secondary group-hover:text-brand-primary text-center">
+                          {selectedFile ? selectedFile.name : 'Seret & Lepaskan atau Klik untuk Pilih Foto'}
+                        </span>
+                        <span className="text-[8px] text-brand-secondary/60 text-center">
+                          JPG, JPEG, PNG, GIF (Maks 600KB - Dikompres otomatis di disk/client)
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                      </label>
+                    </div>
+                    {formData.imageUrl.startsWith('data:image/') && (
+                      <div className="text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedFile(null);
+                            setPreviewUrl('');
+                            setFormData(prev => ({ ...prev, imageUrl: '' }));
+                          }}
+                          className="text-[9px] font-bold text-red-500 uppercase tracking-widest hover:underline"
+                        >
+                          Hapus Foto Terpilih
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

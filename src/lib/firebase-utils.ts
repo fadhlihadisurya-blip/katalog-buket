@@ -46,6 +46,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  // We throw a more readable error for the UI, but log the full JSON for the agent
-  throw new Error(error instanceof Error ? error.message : 'Missing or insufficient permissions');
+  throw new Error(JSON.stringify(errInfo));
 }

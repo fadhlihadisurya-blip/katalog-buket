@@ -1,15 +1,28 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import firebaseConfig from '../../firebase-applet-config.json';
+import firebaseConfigFromJson from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const config = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigFromJson.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigFromJson.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigFromJson.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigFromJson.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigFromJson.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigFromJson.appId,
+};
+
+const databaseId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || firebaseConfigFromJson.firestoreDatabaseId;
+
+if (!import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.PROD) {
+  console.warn('Firebase environment variables are missing. Falling back to local config. If this is Vercel, please add them to Project Settings for security.');
+}
+
+const app = initializeApp(config);
 
 // Initialize services
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+export const db = getFirestore(app, databaseId);
 export const auth = getAuth(app);
-export const storage = getStorage(app);
 
 // Validation check as per skill requirements
 async function testConnection() {

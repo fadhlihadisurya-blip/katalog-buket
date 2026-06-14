@@ -1,4 +1,4 @@
-# Security Specification for Paradise Bucket
+# Security Specification for Paradisebuket
 
 ## Data Invariants
 1. A product must have a name, non-negative price, and valid category.

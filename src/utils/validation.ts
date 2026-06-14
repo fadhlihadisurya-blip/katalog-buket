@@ -5,7 +5,7 @@
  */
 
 export const ALLOWED_EXTENSIONS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+export const MAX_FILE_SIZE = 600 * 1024; // 600KB (Base64 overhead makes it ~800KB, safe for 1MB document limit)
 
 export interface ValidationResult {
   isValid: boolean;

@@ -34,6 +34,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onBack }) => {
       
       if (err.code === 'auth/operation-not-allowed') {
         errorMessage = `Metode "Email/Password" belum aktif di Firebase Console untuk Project ID: ${auth.app.options.projectId}. Mohon pastikan Anda mengaktifkannya di bagian Build > Authentication > Sign-in method.`;
+      } else if (err.code === 'auth/unauthorized-domain') {
+        errorMessage = `Domain "${window.location.hostname}" belum diizinkan untuk Firebase Authentication. Harap tambahkan domain ini ke daftar "Authorized domains" di Firebase Console (Authentication > Settings).`;
       } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         errorMessage = 'Email atau password salah.';
       } else if (err.code === 'auth/too-many-requests') {
@@ -199,7 +201,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onBack }) => {
         </div>
         
         <p className="text-center mt-8 text-[10px] uppercase tracking-widest text-brand-secondary font-medium">
-          Paradise Bucket Admin Panel &copy; 2026 
+          Paradisebuket Admin Panel &copy; 2026 
         </p>
       </motion.div>
     </div>

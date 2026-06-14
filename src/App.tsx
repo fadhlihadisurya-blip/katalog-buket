@@ -28,10 +28,16 @@ function MainApp() {
   // Filtered products for catalog
   const filteredProducts = products.filter(p => {
     const matchesCategory = selectedCategory === 'All Collections' || p.category === selectedCategory;
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         p.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !searchQuery || 
+                         (p.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          p.category?.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
+
+  const categoryCounts = ['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet'].reduce((acc, cat) => {
+    acc[cat] = products.filter(p => p.category === cat).length;
+    return acc;
+  }, {} as Record<string, number>);
 
   // Best seller products for home
   const bestSellers = products.filter(p => p.isBestSeller);
@@ -39,16 +45,28 @@ function MainApp() {
   // Fetch products
   useEffect(() => {
     const path = 'products';
-    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+    // Remove orderBy to ensure products without createdAt field are not hidden
+    // We will sort client-side instead
+    const q = query(collection(db, path));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const productData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Product[];
-      setProducts(productData);
+      
+      // Sort client-side: prioritize createdAt, fallback to id
+      const sortedData = [...productData].sort((a, b) => {
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeB - timeA;
+      });
+      
+      setProducts(sortedData);
       setLoadingProducts(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      console.error("Error fetching products:", error);
+      // Don't throw inside listener to avoid crashing component, but set loading false
+      setLoadingProducts(false);
     });
     return unsubscribe;
   }, []);
@@ -58,7 +76,7 @@ function MainApp() {
       <div className="min-h-screen bg-brand-bg flex items-center justify-center">
         <div className="animate-pulse flex flex-col items-center gap-4">
           <Flower2 size={48} className="text-brand-primary/20" />
-          <span className="text-[10px] uppercase tracking-[0.3em] text-brand-secondary font-bold">Paradise Bucket</span>
+          <span className="text-[10px] uppercase tracking-[0.3em] text-brand-secondary font-bold">Paradisebuket</span>
         </div>
       </div>
     );
@@ -77,7 +95,7 @@ function MainApp() {
       <header className="flex justify-between items-center px-6 md:px-12 py-8 border-b border-brand-border bg-white/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="flex flex-col cursor-pointer" onClick={() => setView('home')}>
           <h1 className="text-3xl font-serif tracking-tight leading-none italic font-bold text-brand-primary">
-            Paradise Bucket
+            Paradisebuket
           </h1>
           <span className="text-[10px] uppercase tracking-[0.2em] mt-1 text-brand-secondary font-medium">
             Artisan Floral Curators
@@ -104,6 +122,12 @@ function MainApp() {
           </button>
         </nav>
         <div className="flex items-center gap-4">
+          {user?.email?.toLowerCase() === 'fadhlihadisurya@gmail.com' && (
+            <div className="hidden lg:flex flex-col items-end mr-2 opacity-40">
+              <span className="text-[7px] font-mono leading-none">DB: {products.length} Items</span>
+              <span className="text-[7px] font-mono leading-none mt-1">CAT: {filteredProducts.length} Res</span>
+            </div>
+          )}
           <button 
             onClick={() => setIsSearchOpen(!isSearchOpen)}
             className={`p-2 rounded-full transition-colors ${isSearchOpen ? 'text-brand-primary bg-brand-bg' : 'text-brand-secondary hover:text-brand-primary'}`}
@@ -178,7 +202,7 @@ function MainApp() {
                     transition={{ delay: 0.2 }}
                     className="text-lg text-brand-accent max-w-lg leading-relaxed font-light mx-auto md:mx-0"
                   >
-                    Kurasi terbaik dari koleksi Paradise Bucket, didesain untuk menyentuh hati dan memperindah suasana.
+                    Kurasi terbaik dari koleksi Paradisebuket, didesain untuk menyentuh hati dan memperindah suasana.
                   </motion.p>
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
@@ -215,10 +239,20 @@ function MainApp() {
                     <ProductCard key={product.id} product={product} index={i} />
                   ))}
                 </div>
+              ) : products.length > 0 ? (
+                <div className="text-center py-20 bg-brand-bg rounded-3xl border border-dashed border-brand-border px-8">
+                   <p className="font-serif italic text-brand-accent">Tidak ada produk Best Seller saat ini.</p>
+                   <button 
+                    onClick={() => setView('catalog')} 
+                    className="mt-6 px-10 py-4 bg-brand-primary text-white text-[10px] uppercase font-bold tracking-widest rounded-sm shadow-xl shadow-brand-primary/20 hover:scale-[1.02] transition-all"
+                   >
+                    Lihat Seluruh Koleksi ({products.length})
+                   </button>
+                </div>
               ) : (
                 <div className="text-center py-20 opacity-40 italic font-serif">
-                   <p>Belum ada produk Best Seller saat ini.</p>
-                   <button onClick={() => setView('catalog')} className="mt-4 text-[10px] uppercase font-bold tracking-widest text-brand-primary border-b border-brand-primary">Lihat Katalog Lengkap</button>
+                   <p>Belum ada produk yang tersedia saat ini.</p>
+                   <button onClick={() => setView('catalog')} className="mt-4 text-[10px] uppercase font-bold tracking-widest text-brand-primary border-b border-brand-primary">Lihat Katalog</button>
                 </div>
               )}
             </section>
@@ -238,19 +272,25 @@ function MainApp() {
                 <ul className="flex flex-row lg:flex-col flex-wrap gap-4 lg:gap-5 text-sm">
                   <li 
                     onClick={() => setSelectedCategory('All Collections')}
-                    className={`flex items-center gap-3 font-semibold cursor-pointer transition-colors ${selectedCategory === 'All Collections' ? 'text-brand-primary' : 'text-brand-accent hover:text-brand-primary'}`}
+                    className={`flex items-center justify-between font-semibold cursor-pointer transition-colors ${selectedCategory === 'All Collections' ? 'text-brand-primary' : 'text-brand-accent hover:text-brand-primary'}`}
                   >
-                    {selectedCategory === 'All Collections' && <div className="w-1.5 h-1.5 rounded-full bg-brand-primary"></div>}
-                    All Collections
+                    <div className="flex items-center gap-3">
+                      {selectedCategory === 'All Collections' && <div className="w-1.5 h-1.5 rounded-full bg-brand-primary"></div>}
+                      All Collections
+                    </div>
+                    <span className="text-[9px] opacity-40">{products.length}</span>
                   </li>
                   {['Hand Bouquet', 'Box Bouquet', 'Round Bouquet', 'Standing Flower', 'Money Bouquet'].map((cat) => (
                     <li 
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`cursor-pointer transition-colors font-medium flex items-center gap-3 ${selectedCategory === cat ? 'text-brand-primary font-bold' : 'text-brand-accent hover:text-brand-primary'}`}
+                      className={`cursor-pointer transition-colors font-medium flex items-center justify-between ${selectedCategory === cat ? 'text-brand-primary font-bold' : 'text-brand-accent hover:text-brand-primary'}`}
                     >
-                      {selectedCategory === cat && <div className="w-1.5 h-1.5 rounded-full bg-brand-primary"></div>}
-                      {cat}
+                      <div className="flex items-center gap-3">
+                        {selectedCategory === cat && <div className="w-1.5 h-1.5 rounded-full bg-brand-primary"></div>}
+                        {cat}
+                      </div>
+                      <span className="text-[9px] opacity-40">{categoryCounts[cat] || 0}</span>
                     </li>
                   ))}
                 </ul>
@@ -288,7 +328,15 @@ function MainApp() {
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center opacity-30 text-center py-20">
                   <Flower2 size={48} className="mb-4" />
-                  <p className="text-sm font-serif italic">Belum ada koleksi yang tersedia untuk kategori ini.</p>
+                  <p className="text-sm font-serif italic mb-4">Belum ada koleksi yang tersedia untuk kategori ini.</p>
+                  {selectedCategory !== 'All Collections' && (
+                    <button 
+                      onClick={() => setSelectedCategory('All Collections')}
+                      className="text-[10px] font-bold uppercase tracking-widest text-brand-primary border-b border-brand-primary"
+                    >
+                      Lihat Semua Koleksi
+                    </button>
+                  )}
                 </div>
               )}
             </main>
@@ -304,14 +352,14 @@ function MainApp() {
             <div className="max-w-3xl w-full text-center space-y-8">
               <div className="space-y-4">
                 <h2 className="text-4xl md:text-5xl font-serif text-brand-text italic font-bold">Apa Kata Mereka?</h2>
-                <p className="text-brand-secondary text-sm uppercase tracking-[0.2em] font-medium">Testimoni Pelanggan Paradise Bucket</p>
+                <p className="text-brand-secondary text-sm uppercase tracking-[0.2em] font-medium">Testimoni Pelanggan Paradisebuket</p>
                 <div className="w-16 h-[1px] bg-brand-primary mx-auto mt-6"></div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left mt-12">
                 {[
                   { name: "Siti Rahma", text: "Buketnya cantik sekali, bunganya segar dan pengirimannya tepat waktu. Sangat merekomendasikan!" },
-                  { name: "Budi Santoso", text: "Pelayanan Paradise Bucket sangat ramah. Custom bouquet-nya persis seperti yang saya bayangkan." },
+                  { name: "Budi Santoso", text: "Pelayanan Paradisebuket sangat ramah. Custom bouquet-nya persis seperti yang saya bayangkan." },
                   { name: "Lestari", text: "Kualitas premium dengan harga yang terjangkau. Sudah langganan setiap ada acara spesial." },
                   { name: "Andi Wijaya", text: "Box bouquet-nya mewah banget. Istri saya suka sekali kejutannya. Terima kasih!" }
                 ].map((testi, i) => (
@@ -342,7 +390,14 @@ function MainApp() {
           <span className="text-[10px] uppercase tracking-widest text-brand-secondary font-bold">Available On:</span>
           <div className="flex gap-8 opacity-40 grayscale group hover:opacity-100 hover:grayscale-0 transition-all cursor-pointer font-bold text-xs tracking-tight">
             <span className="hover:text-[#25D366] transition-colors">WhatsApp</span>
-            <span className="hover:text-[#EE4D2D] transition-colors">Shopee</span>
+            <a 
+              href="https://s.shopee.co.id/20t3hs5DBH" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-[#EE4D2D] transition-colors"
+            >
+              Shopee
+            </a>
             <span className="hover:text-[#03AC0E] transition-colors">Tokopedia</span>
           </div>
         </div>

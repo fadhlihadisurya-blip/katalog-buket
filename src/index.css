@@ -4,6 +4,7 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+  --font-calibri: "Calibri", "Candara", "Segoe UI", "Optima", "Arial", sans-serif;
   
   --color-brand-bg: #FAF9F6;
   --color-brand-text: #2D2A26;

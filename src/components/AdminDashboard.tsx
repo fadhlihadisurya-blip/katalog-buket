@@ -34,17 +34,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   // Fetch Products
   useEffect(() => {
     const path = 'products';
-    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+    // Use simple query to avoid hidden documents missing createdAt
+    const q = query(collection(db, path));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const productData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Product[];
-      setProducts(productData);
+      
+      // Client-side sort
+      const sortedData = [...productData].sort((a, b) => {
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeB - timeA;
+      });
+      
+      setProducts(sortedData);
       setLoading(false);
+      setError(null);
     }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, path);
+      console.error("Fetch products error:", err);
+      // Check if it's a permission error or database-not-found
+      const errorMessage = err.message || "Unknown error";
+      if (errorMessage.includes('permission-denied')) {
+         setError("Izin ditolak (Permission Denied). Harap periksa Firestore Rules.");
+      } else if (errorMessage.includes('not-found')) {
+         setError("Database tidak ditemukan. Harap periksa Database ID.");
+      } else {
+         setError(`Gagal memuat produk: ${errorMessage}`);
+      }
       setLoading(false);
     });
 
@@ -106,6 +125,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     }
   };
 
+  const handleSeedTestData = async () => {
+    if (!window.confirm("Seed product pengetesan ke database?")) return;
+    setFormLoading(true);
+    const path = 'products';
+    try {
+      const testProduct = {
+        name: "Produk Pengetesan Paradise",
+        price: 150000,
+        category: 'Hand Bouquet' as const,
+        description: "Buket bunga percobaan untuk memastikan koneksi database aktif.",
+        imageUrl: "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?q=80&w=800&auto=format&fit=crop",
+        isBestSeller: true,
+        marketplaceLinks: {
+          shopee: "https://shopee.co.id",
+          tokopedia: "https://tokopedia.com",
+          whatsapp: "https://wa.me/628123456789"
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      await addDoc(collection(db, path), testProduct);
+      alert("Test data berhasil ditambahkan!");
+    } catch (err: any) {
+      alert(`Gagal seed: ${err.message}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col font-sans">
       {/* Admin Header */}
@@ -115,7 +163,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             <Flower2 size={20} />
           </div>
           <div>
-            <h1 className="text-lg font-serif italic font-bold tracking-tight text-brand-text leading-none">Paradise Bucket</h1>
+            <h1 className="text-lg font-serif italic font-bold tracking-tight text-brand-text leading-none">Paradisebuket</h1>
             <p className="text-[9px] uppercase tracking-[0.2em] text-brand-secondary font-bold mt-1.5">Administrative Suite</p>
           </div>
         </div>
@@ -129,8 +177,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           </button>
           
           <div className="hidden md:flex flex-col items-end">
-            <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest leading-none">Authorized Admin</span>
-            <span className="text-[9px] text-brand-secondary mt-1">{user?.email}</span>
+            <div className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${user?.email?.toLowerCase() === 'fadhlihadisurya@gmail.com' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+              <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest leading-none">Authorized Admin</span>
+            </div>
+            <span className="text-[9px] text-brand-secondary mt-1">{user?.email} ({products.length} Products)</span>
+            {user?.email?.toLowerCase() === 'fadhlihadisurya@gmail.com' && (
+              <span className="text-[7px] text-brand-secondary opacity-30 mt-1 uppercase tracking-tighter">
+                DB: {db.app.options.projectId} / {import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || 'Config'}
+              </span>
+            )}
           </div>
           <button 
             onClick={handleLogout}
@@ -234,6 +290,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     src={product.imageUrl} 
                     alt={product.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'https://images.unsplash.com/photo-1526047932273-341f2a7631f9?q=80&w=800&auto=format&fit=crop';
+                      target.onerror = null;
+                    }}
                   />
                   <div className="absolute top-4 left-4 flex flex-col gap-2">
                     <span className="px-3 py-1 bg-white/90 backdrop-blur-md text-[9px] uppercase tracking-[0.15em] font-bold text-brand-primary rounded-full shadow-sm border border-brand-primary/10">
@@ -266,8 +327,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
                 {/* Product Details */}
                 <div className="p-6">
-                  <div className="flex justify-between items-start mb-3">
-                    <h3 className="text-lg font-serif italic font-bold text-brand-text tracking-tight group-hover:text-brand-primary transition-colors">
+                  <p className="text-[10px] text-brand-secondary mb-3 line-clamp-2">
+                    {product.description}
+                  </p>
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="text-lg font-calibri italic font-bold text-brand-text tracking-tight group-hover:text-brand-primary transition-colors">
                       {product.name}
                     </h3>
                   </div>
@@ -295,9 +359,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
               <Flower2 size={40} className="text-brand-border" />
             </div>
             <h3 className="text-xl font-serif text-brand-text italic font-bold mb-2">No creations found</h3>
-            <p className="text-sm text-brand-secondary max-w-xs mx-auto font-light leading-relaxed mb-10">
+            <p className="text-sm text-brand-secondary max-w-xs mx-auto font-light leading-relaxed mb-6">
               {searchQuery ? `Tidak ada hasil untuk "${searchQuery}"` : 'Katalog masih kosong. Mulai dengan menambahkan produk buket bunga pertama Anda.'}
             </p>
+            
+            {user?.email?.toLowerCase() === 'fadhlihadisurya@gmail.com' && (
+              <div className="mb-10 px-6 py-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-brand-secondary opacity-60">Diagnostic Info (Admin Only)</p>
+                <div className="flex flex-col gap-1 text-[9px] font-mono text-brand-accent">
+                  <p>Project: {db.app.options.projectId}</p>
+                  <p>Database: {import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || '(default / from config)'}</p>
+                  <p>Collection: products</p>
+                </div>
+                <button 
+                  onClick={handleSeedTestData}
+                  disabled={formLoading}
+                  className="mt-4 px-4 py-2 bg-white border border-brand-border text-[9px] uppercase font-bold tracking-widest text-brand-primary rounded-lg hover:bg-brand-bg transition-all"
+                >
+                  Create One Test Product
+                </button>
+              </div>
+            )}
+
             <button 
               onClick={() => {
                 setEditingProduct(undefined);

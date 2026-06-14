@@ -8,7 +8,7 @@ export interface Product {
   id?: string;
   name: string;
   price: number;
-  category: 'Hand Bouquet' | 'Box Bouquet' | 'Round Bouquet' | 'Standing Flower';
+  category: 'Hand Bouquet' | 'Box Bouquet' | 'Round Bouquet' | 'Standing Flower' | 'Money Bouquet';
   description: string;
   imageUrl: string;
   marketplaceLinks: MarketplaceLinks;
