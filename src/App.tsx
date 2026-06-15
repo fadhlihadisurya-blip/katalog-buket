@@ -406,7 +406,7 @@ function MainApp() {
               Shopee
             </a>
             <a 
-              href="https://wa.me/6285362804876?text=Hallo,%20Saya%20tertarik%20untuk%20membeli%20produknya.%20" 
+              href="https://tk.tokopedia.com/ZSQCkfunu/" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="hover:text-[#03AC0E] transition-colors"
